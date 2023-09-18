@@ -12,72 +12,163 @@ import time
 import json
 import re
 import argparse
+import progressbar
 from calendar import monthrange
 from dotenv import load_dotenv
 from io import TextIOWrapper
 
+# loads variables from the .env file
+load_dotenv()
+
+# constants
+PADDING_WIDTH = 23
+
+
+# class definitions
 class FileLineInfo:
     """ This class keeps track of the number of lines during operation.
 
-        Fields:
+        Attributes:
             count (int): The line counter of a file.
-        
-        Functions:
-            increm_count(): Increments count by 1.
-            get_count(): Returns count.
     """
     def __init__(self):
+        """ Constructor for FileLineInfo, instantiates attributes.
+        """
         self.count = 0
     
-    def increm_count(self):
+    def increm_count(self) -> None:
+        """Increments count by 1.
+        """
         self.count += 1
     
-    def get_count(self):
+    def get_count(self) -> int:
+        """Returns count.
+
+        Returns:
+            int: Returns the current count of the instance.
+        """
         return self.count
-
-
-def main():
-    """The main operations of the script, deals with command-line arguments and
-       calling the function :meth:`conduct_gather` to begin the scripting process.
-    """
-    # command-line information
-    desc = "A script that accesses the NVD NIST CVE API. Returns data of CVE entries " \
-           "on a per month basis given a specified start and end year (inclusive). The " \
-           "script will write the following information in a CSV format to the output " \
-           "file; however, the file extension for this file does not matter."
-    parser = argparse.ArgumentParser(description=desc)
-
-    parser.add_argument("-o", "--output_file", help="Where the data will be sent to.", required=True)
-    syhelp = "Beginning published year (inclusive). Range of years: 1988 - 2023, " \
-             "NOTE that it must be less than or equal to the end year."
-    parser.add_argument("-sy", "--start_year", help=syhelp, required=True, type=validate_year)
-    eyhelp = "Ending published year (inclusive). Range of years: 1988 - 2023, " \
-             "NOTE that it must be greater than or equal to the start year."
-    parser.add_argument("-ey", "--end_year", help=eyhelp, required=True, type=validate_year)
-    parser.add_argument("-ch", "--csv_headers", help="CSV Header information for headers & traversal.", required=True, type=validate_csv_headers)
-    eahelp = "Extra arguments for the API URL, provide as many as needed. " \
-             "Example: ... -ea arg1 arg2 arg3 ..."
-    parser.add_argument("-ea", "--extra_args", nargs="+", help=eahelp,type=validate_extra_args, required=False)
-
-    args = parser.parse_args()
-
-    #post argument parse processing
-    if args.start_year > args.end_year:
-        parser.print_usage()
-        print("Argument Error: Please make sure that start year is less than or equal to end year (inclusve).")
-        graceful_exit(99)
     
-    eargs = ""
-    if args.extra_args:
-        eargs = "&".join(args.extra_args)
-        if len(args.extra_args) == 1:
-            eargs += "&"
+
+class ProgramStatus:
+    """ This class manages the status of the program through a progress bar.
+
+        Attributes:
+            pb (progressbar.Progressbar|None): Serves as the main progress bar.
+            max_val (int): Indicates the total increments of the progress.
+            widgets (list|None): The progress bar's styling.
+            counter (int): The current iteration of the progress.
+            status (str): Displays the current status of the program.
+            progress (str): Displays the overall progress in readible form.
+    """
+
+    def __init__(self, max_val: int):
+        """ Constructor for ProgramStatus, instantiates attributes.
+
+        Args:
+            max_val (int): Required for the total increments of the progress bar.
+        """
+        self.pb = None
+        self.max_val = max_val
+        self.widgets = None
+        self.counter = 0
+        self.status = "..."
+        self.progress = "..."
+
+    
+    def create_progress_bar(self):
+        """ Creates the progress bar with custom widgets
+        """
+        self.widgets = [
+            self.status,
+            progressbar.Percentage(),
+            " (", self.progress ,") ",
+            progressbar.Bar(), " ",
+            progressbar.Timer(), " | " , progressbar.AdaptiveETA()
+        ]
+
+        self.pb = progressbar.ProgressBar(max_value=self.max_val, widgets=self.widgets)
+    
+    def update_progress_bar(self, status: str = None, progress: str = None, increment_total = False):
+        """ Updates the progress bar given status, progress, or total increments.
+
+        Args:
+            status (str, optional): Presents the current status. Defaults to None.
+            progress (str, optional): Presents the current progress. Defaults to None.
+            increment_total (bool, optional): Indicates where to increment the total progress or not. Defaults to False.
+
+        Raises:
+            AttributeError: Raised if the update function is invoked before invoking :meth:`create_progress_bar`
+        """
+        if self.pb:
+            if status:
+                self.status = status
+            if progress:
+                self.progress = progress
+
+            #self.widgets[0] correlates to status
+            #self.widgets[3] correlates to progress
+            self.widgets[0] = self.status
+            if self.counter != self.max_val:
+                self.widgets[3] = self.progress
+            
+            if increment_total:
+                self.counter += 1
+
+            self.pb.update(self.counter)
+        else:
+            raise AttributeError("Please make sure to invoke example_obj.create_progress_bar() before updating.")
 
 
-    #main operation
-    conduct_gather(args.output_file,args.start_year,args.end_year,args.csv_headers,eargs)
+    def _close_progress_bar(self):
+        """ Finishes the progress bar, should not be invoked outside of class.
+        """
+        if self.pb:
+            self.pb.finish()
+    
+    def __del__(self):
+        """ Destructor which closes the progress bar once the object is out of scope.
+        """
+        self._close_progress_bar()
+
+class DateProgress:
+    """ This class manages the progress of dates, specifically for the usage of this script.
+
+        Attributes:
+            year_count (int): Used to keep track of the year.
+            month_count (int): used to keep track of the month, repeats every 12.
+    """
+    def __init__(self, start_year):
+        """ Constructor for DateProgress, instantiates attributes.
+
+        Args:
+            start_year (int): The beginning year which is used as a starting point.
+        """
+        self.year_count = start_year
+        self.month_count = 1
+    
+    def update_month(self) -> None:
+        """ Increments the month count, sets the count to 1 after exceeding 12.
+        """
+        self.month_count += 1
+        if self.month_count > 12:
+            self.month_count = 1
+    
+    def update_year(self) -> None:
+        """ Increments the year count.
+        """
+        self.year_count += 1
+    
+    def month_progress(self) -> str:
+        """Formats the progress of the current attributes.
+
+        Returns:
+            str: Formatted string.
+        """
+        return f'mo {self.month_count}, yr {self.year_count}'
 
 
+# function definitions
 def validate_year(value) -> int:
     """Validates the year given a string value. This is used  in conjuction
        with argparse's :meth:`add_argument` function as "type."
@@ -182,7 +273,14 @@ def conduct_gather(output_filename: str = "output.csv",
     try:
         with open(output_filename, "w") as output_f:
 
+            total_iter = ((end_year - start_year + 1) * 12)
+
             rowcount = FileLineInfo()
+
+            date_prog = DateProgress(start_year)
+
+            prog_status = ProgramStatus(total_iter)
+            prog_status.create_progress_bar()
 
             api_key_exists = False
             if os.environ.get("api_key"):
@@ -196,19 +294,22 @@ def conduct_gather(output_filename: str = "output.csv",
             rowcount.increm_count()
 
             for year_ind in range(start_year, end_year + 1):
+
                 for month_ind in range(1,13):
+                    prog_status.update_progress_bar(f'{"Retrieving data...":{PADDING_WIDTH}}',date_prog.month_progress(),True)
+
                     data_to_write = None
                     start_index = 0
                     within_valid_range = True
 
-                    print(f'Current year: {year_ind}, month: {month_ind}')
 
                     while within_valid_range:
                         api_response = call_nvd_api(year_ind,
                                                     month_ind,
                                                     start_index,
                                                     extra_args,
-                                                    api_key_exists)
+                                                    api_key_exists,
+                                                    prog_status)
                         
                         if api_response is None:
                             graceful_exit(0)
@@ -218,9 +319,13 @@ def conduct_gather(output_filename: str = "output.csv",
                         start_index += 2000
 
                         if(start_index >= data_to_write["totalResults"]):
-                            within_valid_range = False
-                print("- - -")
-                time.sleep(2)
+                            within_valid_range = False 
+                    
+                    date_prog.update_month()
+                
+                date_prog.update_year()
+                prog_status.update_progress_bar(f'{"... ":{PADDING_WIDTH}}',date_prog.month_progress(),False)
+                time.sleep(3)
 
     except IOError:
         graceful_exit(1)    
@@ -278,7 +383,7 @@ def write_csv_headers_tofile(file: TextIOWrapper, headers: dict) -> None:
     
     file.write(output_header[:-1] + "\n")
 
-def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_key_exists: bool = False) -> str|None:
+def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_key_exists: bool = False, status: ProgramStatus = None) -> str|None:
     """Calls the NVD API and returns information about the provided month in a year.
 
     Args:
@@ -287,6 +392,9 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
         start_index (int): Beginning index of call (increments of 2000 for this API)
         args (str, optional): Any arguments included in the URL. Defaults to "".
         api_key_exists (bool, optional): Uses API key if exists. Defaults to False.
+        status (ProgramStatus, optional): Defines the current status of the requests 
+                                          and displays it to the progress bar if present.
+                                          Defaults to None.
 
     Returns:
         str|None: A valid JSON string, else None is returned.
@@ -314,18 +422,35 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
 
                 if response.status_code == 403:
                     # wait 30 seconds before calling API again
-                    print("Waiting for API...")
-                    time.sleep(31)
+
+                    if status:
+                        for i in range(30, -1, -1):
+                            status_msg = f'Waiting for API ({i}s)'
+                            status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
+                            time.sleep(1)
+                    else:
+                        print("Waiting for API...") 
+                        time.sleep(31)
                 elif response.status_code == 200:
                     is_not_OK = False
                 else:
-                    print(f'Current Status: {response.status_code}')
-                    print("Processing another request...")
+
+                    if status:
+                        status_msg = f'Code: {response.status_code}, Trying again...'
+                        status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
+                    else:
+                        print(f'Status Code: {response.status_code}')
+                        print("Processing another request...")
                     time.sleep(2)
 
                     attempt_counter += 1
                     if attempt_counter > 10: #limiting attempts to 10
-                        print("Exceeded attempts, aborting...")
+                        
+                        if status:
+                            status.update_progress_bar(status=f'{"Exceeded attempts, aborting...":{PADDING_WIDTH}}')
+                        else:
+                            print("Exceeded attempts, aborting...")
+
                         return None
         except Exception as e:
             return None
@@ -358,7 +483,13 @@ def write_json_data_tofile(file: TextIOWrapper, data: list, headers: dict, rowco
                     if element.isnumeric() or re.match(r'^[-+]?\d*\.\d*$',element) is not None:
                         row += element[:-2] if element.endswith(".0") else element
                     else:
-                        row += f'\"{element}\"'
+                        element = f'\"{element}\"'
+
+                        if re.search(r'\\"',element):
+                            element = re.sub(r'\\"', "\'", element)
+                        
+                        row += element
+                        
                 row += ","
         file.write(row[:-1]+"\n")
 
@@ -398,16 +529,56 @@ def graceful_exit(exit_status: int = -1):
     if exit_status == 99: # Anything that does not require an exit message.
         print("\n")
     elif exit_status == 0: #call_nvd_api() returned None 
-        print("There was an issue with the API call, exiting.")
+        print("\nThere was an issue with the API call, exiting.")
     elif exit_status == 1: #IO issue
-        print("There was an issue with Input/Output, exiting.")
+        print("\nThere was an issue with Input/Output, exiting.")
     else:
-        print("Unknown cause of error, exiting.")
+        print("\nUnknown cause of error, exiting.")
 
     sys.exit(1)
 
 
-load_dotenv() #loads variables from the .env file
+# main function definition
+def main():
+    """The main operations of the script, deals with command-line arguments and
+       calling the function :meth:`conduct_gather` to begin the scripting process.
+    """
+    # command-line information
+    desc = "A script that accesses the NVD NIST CVE API. Returns data of CVE entries " \
+           "on a per month basis given a specified start and end year (inclusive). The " \
+           "script will write the following information in a CSV format to the output " \
+           "file; however, the file extension for this file does not matter."
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument("-o", "--output_file", help="Where the data will be sent to.", required=True)
+    syhelp = "Beginning published year (inclusive). Range of years: 1988 - 2023, " \
+             "NOTE that it must be less than or equal to the end year."
+    parser.add_argument("-sy", "--start_year", help=syhelp, required=True, type=validate_year)
+    eyhelp = "Ending published year (inclusive). Range of years: 1988 - 2023, " \
+             "NOTE that it must be greater than or equal to the start year."
+    parser.add_argument("-ey", "--end_year", help=eyhelp, required=True, type=validate_year)
+    parser.add_argument("-ch", "--csv_headers", help="CSV Header information for headers & traversal.", required=True, type=validate_csv_headers)
+    eahelp = "Extra arguments for the API URL, provide as many as needed. " \
+             "Example: ... -ea arg1 arg2 arg3 ..."
+    parser.add_argument("-ea", "--extra_args", nargs="+", help=eahelp,type=validate_extra_args, required=False)
+
+    args = parser.parse_args()
+
+    #post argument parse processing
+    if args.start_year > args.end_year:
+        parser.print_usage()
+        print("Argument Error: Please make sure that start year is less than or equal to end year (inclusve).")
+        graceful_exit(99)
+    
+    eargs = ""
+    if args.extra_args:
+        eargs = "&".join(args.extra_args)
+        if len(args.extra_args) == 1:
+            eargs += "&"
+
+
+    #main operation
+    conduct_gather(args.output_file,args.start_year,args.end_year,args.csv_headers,eargs)
     
 
 if __name__ == "__main__":

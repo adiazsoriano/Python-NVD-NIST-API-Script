@@ -517,14 +517,15 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
     month_rjustified = str(month).rjust(2,'0')
     days_in_month = monthrange(year, month)[1]
 
-    while is_not_OK:
-        url = f'https://services.nvd.nist.gov/rest/json/cves/2.0/?{args}pubStartDate={year}-{month_rjustified}-01T00:00:00&pubEndDate={year}-{month_rjustified}-{days_in_month}T23:59:59&resultsPerPage=2000&startIndex={start_index}'
-        headers = dict()
+    url = f'https://services.nvd.nist.gov/rest/json/cves/2.0/?{args}pubStartDate={year}-{month_rjustified}-01T00:00:00&pubEndDate={year}-{month_rjustified}-{days_in_month}T23:59:59&resultsPerPage=2000&startIndex={start_index}'
+    headers = dict()
 
-        if api_key_exists:
-            headers = {
-                "apiKey" : os.environ.get("api_key")
-            }
+    if api_key_exists:
+        headers = {
+            "apiKey" : os.environ.get("api_key")
+        }
+
+    while is_not_OK:
 
         try:
             with requests.get(url=url,headers=headers,allow_redirects=False) as response:
@@ -708,8 +709,7 @@ def main():
     eargs = ""
     if args.extra_args:
         eargs = "&".join(args.extra_args)
-        if len(args.extra_args) == 1:
-            eargs += "&"
+        eargs += "&"
 
 
     #main operation

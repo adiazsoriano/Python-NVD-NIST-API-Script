@@ -39,6 +39,6 @@ Example:
     >python nvd_nist_cve_gatherdata.py -o output.csv -sy 1988 -ey 2023 -dm csvHeaders.txt
 
     Example 2: With the optional arguments
-    >python nvd_nist_cve_gatherdata.py -o something.csv -sy 2021 -ey 2021 -dm csvHeaders.json -ea noRejected
+    >python nvd_nist_cve_gatherdata.py -o options.csv -sy 2021 -ey 2021 -dm csvHeaders.json -ea noRejected cvssV2Severity=LOW
 ```
 For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters. 

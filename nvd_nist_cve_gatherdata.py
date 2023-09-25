@@ -212,7 +212,7 @@ class CliArgValidation:
         args_to_check = ["pubStartDate", "pubEndDate", "resultsPerPage", "startIndex"]
         value = str(value).strip()
         
-        if not re.match(r'^[\w*:/=-]+$',value):
+        if not re.match(r'^[\w*.:/=-]+$',value):
             raise argparse.ArgumentTypeError("Please make sure to enter a proper argument for the API URL. ")
         
         for arg in args_to_check:

@@ -41,4 +41,4 @@ Example:
     Example 2: With the optional arguments
     >python nvd_nist_cve_gatherdata.py -o something.csv -sy 2021 -ey 2021 -dm csvHeaders.json -ea noRejected
 ```
-For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities).
+For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters. 

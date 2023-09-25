@@ -447,8 +447,7 @@ def conduct_gather(output_filename: str = "output.csv",
 
     except IOError:
         graceful_exit(1,prog_status)
-            
-                    
+                     
 
 def read_json_tree_info(file: TextIOWrapper) -> dict:
     """Reads the information from a file that contains the assumed format of:
@@ -524,7 +523,6 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
     days_in_month = monthrange(year, month)[1]
 
     url = f'https://services.nvd.nist.gov/rest/json/cves/2.0/?{args}pubStartDate={year}-{month_rjustified}-01T00:00:00&pubEndDate={year}-{month_rjustified}-{days_in_month}T23:59:59&resultsPerPage=2000&startIndex={start_index}'
-    # print(url)
     headers = dict()
 
     if api_key_exists:

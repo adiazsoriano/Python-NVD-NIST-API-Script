@@ -204,6 +204,7 @@ class CliArgValidation:
 
         Raises:
             argparse.ArgumentTypeError: Raised if there are any extra characters not specified.
+                                        Raised if the an element of the list "args_to_check" appear in value
 
         Returns:
             str: A valid string, not based on content but characters.

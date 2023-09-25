@@ -41,4 +41,5 @@ Example:
     Example 2: With the optional arguments
     >python nvd_nist_cve_gatherdata.py -o options.csv -sy 2021 -ey 2021 -dm csvHeaders.json -ea noRejected cvssV2Severity=LOW
 ```
-For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters. 
+For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters.
+**Note**: The API call within the script already uses `pubStartDate`,`pubEndDate`, `resultsPerPage`, and `startIndex`.

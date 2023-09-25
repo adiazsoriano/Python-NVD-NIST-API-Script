@@ -446,7 +446,8 @@ def conduct_gather(output_filename: str = "output.csv",
                 time.sleep(3)
 
     except IOError:
-        graceful_exit(1,prog_status)    
+        graceful_exit(1,prog_status)
+            
                     
 
 def read_json_tree_info(file: TextIOWrapper) -> dict:
@@ -523,6 +524,7 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
     days_in_month = monthrange(year, month)[1]
 
     url = f'https://services.nvd.nist.gov/rest/json/cves/2.0/?{args}pubStartDate={year}-{month_rjustified}-01T00:00:00&pubEndDate={year}-{month_rjustified}-{days_in_month}T23:59:59&resultsPerPage=2000&startIndex={start_index}'
+    # print(url)
     headers = dict()
 
     if api_key_exists:
@@ -642,7 +644,7 @@ def search_nested_value(data: list, args: list) -> str|None:
             if str(arg).isnumeric():
                 usable_arg = int(arg)
             item = item[usable_arg]                
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             return None
     
     return item

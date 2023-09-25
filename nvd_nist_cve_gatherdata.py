@@ -208,11 +208,15 @@ class CliArgValidation:
         Returns:
             str: A valid string, not based on content but characters.
         """
-
+        args_to_check = ["pubStartDate", "pubEndDate", "resultsPerPage", "startIndex"]
         value = str(value).strip()
         
         if not re.match(r'^[\w*:/=-]+$',value):
             raise argparse.ArgumentTypeError("Please make sure to enter a proper argument for the API URL. ")
+        
+        for arg in args_to_check:
+            if value.find(arg) != -1:
+                raise argparse.ArgumentTypeError(f'\"{arg}\" exists within the internal API call, please omit this argument.')
         
         return value
     

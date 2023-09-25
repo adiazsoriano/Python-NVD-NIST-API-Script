@@ -43,4 +43,4 @@ Example:
 ```
 For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters.
 
-**Note**: The API call within the script already uses `pubStartDate`,`pubEndDate`, `resultsPerPage`, and `startIndex`.
+**NOTE**: The API call within the script already uses `pubStartDate`, `pubEndDate`, `resultsPerPage`, and `startIndex`.

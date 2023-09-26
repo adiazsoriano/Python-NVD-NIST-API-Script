@@ -2,7 +2,7 @@
 The python version of: [PHP-NVD-NIST-API-script](https://github.com/adiazsoriano/PHP-NVD-NIST-API-script). It is a CLI based script that takes in command-line arguments. This version may contain improvements over the PHP counterpart.
 
 ## The .env file
-The script reads from the .env file inside the folder if present. Or it reads from the environment using the OS module. Otherwise it defaults to not having an api key.
+The script reads from the .env file inside the folder if present. Or it reads from the environment using the OS module. Otherwise it defaults to not having an api key. Check [here](.env) for an example of this.
 ```dotenv
 api_key='API KEY GOES HERE'
 ```
@@ -44,3 +44,6 @@ Example:
 For more information on optional arguments, see [here](https://nvd.nist.gov/developers/vulnerabilities) under "CVE API" Parameters.
 
 **NOTE**: The API call within the script already uses `pubStartDate`, `pubEndDate`, `resultsPerPage`, and `startIndex`.
+
+## Example Output
+Check out [this folder](example_output/) to see an example of output.

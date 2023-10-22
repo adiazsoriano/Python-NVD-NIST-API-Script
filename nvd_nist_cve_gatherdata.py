@@ -15,7 +15,6 @@ More information here: https://nvd.nist.gov/developers/vulnerabilities
 Author: Angel Diaz-Soriano
 Date Created: 8/29/2023
 """
-
 import os
 import sys
 import requests
@@ -24,6 +23,8 @@ import json
 import re
 import argparse
 import progressbar
+import datetime
+import data_mapping
 from calendar import monthrange
 from dotenv import load_dotenv
 from io import TextIOWrapper
@@ -33,7 +34,7 @@ load_dotenv()
 
 # constants
 PADDING_WIDTH = 30
-
+CURRENT_YEAR = datetime.date.today().year
 
 # class definitions
 class CliArgValidation:
@@ -49,7 +50,7 @@ class CliArgValidation:
             value (any): Value passed in for validation.
 
         Raises:
-            argparse.ArgumentTypeError: Raised if the year is not within the 1988 - 2023 range.
+            argparse.ArgumentTypeError: Raised if the year is not within the 1988 - (current year) range.
                                         Raised if there is a ValueError as a result of non-numeric
                                         input.
 
@@ -59,8 +60,8 @@ class CliArgValidation:
         try:
             year = int(value)
 
-            if year < 1988 or year > 2023:
-                raise argparse.ArgumentTypeError("Please keep this within range of 1988 - 2023 (inclusive).")
+            if year < 1988 or year > CURRENT_YEAR:
+                raise argparse.ArgumentTypeError(f'Please keep this within range of 1988 - {CURRENT_YEAR} (inclusive).')
 
             return year
         except ValueError:
@@ -68,7 +69,8 @@ class CliArgValidation:
     
     @staticmethod
     def validate_data_map(value) -> str:
-        """ The general function which decides whether to parse using json or other txt files.
+        """ The general validation function which decides whether to parse 
+            using json or other txt files.
 
         Args:
             value (any): The value inputted, assumed to be a filename.
@@ -193,6 +195,62 @@ class CliArgValidation:
                                                     'the following format per line: [CSV_HEADER]:[DATA],[DATA],...,[DATA]')
                 
         return str(value)
+
+    @staticmethod
+    def validate_create_mapping(value) -> str:
+        """ Validates given the value (which is the output mode) to make sure
+            it fits within "txt" or "json"
+
+        Args:
+            value (any): Value passed in for validation.
+
+        Raises:
+            argparse.ArgumentTypeError: Raised if "txt" or "json" are not present in the given value
+                                        Raised if not a valid type or value.
+
+        Returns:
+            str: A valid output mode in str form.
+        """
+        try:
+            value = str(value).strip().lower()
+
+            args_to_check = ("json","txt")
+            if value not in args_to_check:
+                raise argparse.ArgumentTypeError(f'{value} is invalid. Please enter either \"json\" or \"txt\" as an argument.')
+            
+            return value
+
+        except (TypeError, ValueError):
+            raise argparse.ArgumentTypeError("Make sure that the value is a valid.")
+    
+    @staticmethod
+    def validate_limit_mapping(value) -> int:
+        """ Valides given the value (assumed to be a number) to make sure it is
+            a valid number between 1 - 100,000.
+
+            It is good to note that when this function isn't utilized, the default
+            value is 0. Which is valid for the program, but the user can't input
+            this value since it isn't necessary.
+
+        Args:
+            value (any): Value passed in for validation.
+
+        Raises:
+            argparse.ArgumentTypeError: Raised if the value isn't a valid number.
+                                        Raised if the value isn't within 1 - 100,000.
+
+        Returns:
+            int: _description_
+        """
+        try:
+            value = int(value)
+
+            if value < 1 or value > 100_000:
+                raise argparse.ArgumentTypeError("Make sure that the value is between 1 and 100,000.")
+
+            return value
+        except ValueError:
+            raise argparse.ArgumentTypeError("Make sure that this is a valid positive number.")
     
     @staticmethod
     def validate_extra_args(value) -> str:
@@ -209,7 +267,7 @@ class CliArgValidation:
         Returns:
             str: A valid string, not based on content but characters.
         """
-        args_to_check = ["pubStartDate", "pubEndDate", "resultsPerPage", "startIndex"]
+        args_to_check = ("pubStartDate", "pubEndDate", "resultsPerPage", "startIndex")
         value = str(value).strip()
         
         if not re.match(r'^[\w*.:/=-]+$',value):
@@ -329,125 +387,66 @@ class ProgramStatus:
         if not self.pb._finished:
             self._close_progress_bar()
 
-class DateProgress:
-    """ This class manages the progress of dates, specifically for the usage of this script.
-
-        Attributes:
-            year_count (int): Used to keep track of the year.
-            month_count (int): used to keep track of the month, repeats every 12.
-    """
-    def __init__(self, start_year):
-        """ Constructor for DateProgress, instantiates attributes.
-
-        Args:
-            start_year (int): The beginning year which is used as a starting point.
-        """
-        self.year_count = start_year
-        self.month_count = 1
-    
-    def update_month(self) -> None:
-        """ Increments the month count, sets the count to 1 after exceeding 12.
-        """
-        self.month_count += 1
-        if self.month_count > 12:
-            self.month_count = 1
-    
-    def update_year(self) -> None:
-        """ Increments the year count.
-        """
-        self.year_count += 1
-    
-    def month_progress(self) -> str:
-        """Formats the progress of the current attributes.
-
-        Returns:
-            str: Formatted string.
-        """
-        return f'mo {self.month_count}, yr {self.year_count}'
-
-
 # function definitions
 def conduct_gather(output_filename: str = "output.csv", 
-                   start_year: int = 1988, 
-                   end_year: int = 2023,
-                   headers_filename: str = "csvHeaders.txt",
-                   extra_args: str = ""
+                     start_year: int = 1988, 
+                     end_year: int = CURRENT_YEAR,
+                     headers_filename: str = "csvHeaders.txt",
+                     extra_args: str = ""
                    ) -> None:
     """Conducts the main 'gather' operation that writes API response info to the output file
 
     Args:
-        output_filename (str, optional): The file name to the output file. Defaults to "output.csv".
+        output_filename (str, optional): The file name of the output file. Defaults to "output.csv".
         start_year (int, optional): Starting published year to gather data (inclusive). Defaults to 1988.
-        end_year (int, optional): Ending published year to gather data (inclusive). Defaults to 2023.
+        end_year (int, optional): Ending published year to gather data (inclusive). Defaults to CURRENT_YEAR.
         headers_filename (str, optional): The infomation needed to parse through JSON tree-structure. Defaults to "csvHeaders.txt".
         extra_args (str, optional): Extra arguments that be given to the API. Defaults to "".
     """
-
     try:
-        with open(output_filename, "w") as output_f:
+        total_iter = ((end_year - start_year + 1) * 12)
 
-            total_iter = ((end_year - start_year + 1) * 12)
+        rowcount = FileLineInfo()
 
-            rowcount = FileLineInfo()
+        prog_status = ProgramStatus(total_iter)
+        prog_status.create_progress_bar()
 
-            date_prog = DateProgress(start_year)
+        api_key_exists = False
+        if os.environ.get("api_key"):
+            api_key_exists = True
 
-            prog_status = ProgramStatus(total_iter)
-            prog_status.create_progress_bar()
+        json_tree_info = retrieve_json_info(headers_filename)
 
-            api_key_exists = False
-            if os.environ.get("api_key"):
-                api_key_exists = True
-
-            json_tree_info = None
-            with open(headers_filename, "r") as input_headers_f:
-                # with the validation from before, the assumption here is that
-                # both files are formatted correctly.
-                if headers_filename.split(".")[1] == "json":
-                    json_tree_info = json.loads(input_headers_f.read())
-                else:
-                    json_tree_info = read_json_tree_info(input_headers_f)
-            
+        with open(output_filename, "w", encoding="utf-8") as output_f:
             write_csv_headers_tofile(output_f, json_tree_info)
             rowcount.increm_count()
 
-            for year_ind in range(start_year, end_year + 1):
+            for month, year in iterate_month_year(start_year,end_year,throttle=3):
+                prog_status.update_progress_bar(f'{"Retrieving data...":{PADDING_WIDTH}}',f'mo {month}, yr {year}',True)
 
-                for month_ind in range(1,13):
-                    prog_status.update_progress_bar(f'{"Retrieving data...":{PADDING_WIDTH}}',date_prog.month_progress(),True)
+                api_results = nvd_api_gather(year,month,extra_args,api_key_exists,prog_status)
 
-                    data_to_write = None
-                    start_index = 0
-                    within_valid_range = True
-
-
-                    while within_valid_range:
-                        api_response = call_nvd_api(year_ind,
-                                                    month_ind,
-                                                    start_index,
-                                                    extra_args,
-                                                    api_key_exists,
-                                                    prog_status)
-                        
-                        if api_response is None:
-                            graceful_exit(0,prog_status)
-                        
-                        data_to_write = json.loads(api_response)
-                        write_json_data_tofile(output_f, data_to_write["vulnerabilities"],json_tree_info,rowcount)
-                        start_index += 2000
-
-                        if(start_index >= data_to_write["totalResults"]):
-                            within_valid_range = False 
-                    
-                    date_prog.update_month()
-                
-                date_prog.update_year()
-                prog_status.update_progress_bar(f'{"... ":{PADDING_WIDTH}}',date_prog.month_progress(),False)
-                time.sleep(3)
-
+                for result in api_results:
+                    write_json_data_tofile(output_f, result["vulnerabilities"],json_tree_info,rowcount,prog_status)
+        
+        prog_status.update_progress_bar(f'{"Written to file. ":{PADDING_WIDTH}}')
     except IOError:
         graceful_exit(1,prog_status)
-                     
+    except Exception as e:
+        graceful_exit(prog_status=prog_status)
+
+def retrieve_json_info(headers_filename:str):
+    json_tree_info = None
+    with open(headers_filename, "r") as input_headers_f:
+        # with the validation from before, the assumption here is that
+        # both files are formatted correctly.
+        if headers_filename.split(".")[1] == "json":
+            json_tree_info = json.loads(input_headers_f.read())
+        else:
+            json_tree_info = read_json_tree_info(input_headers_f)
+
+    return json_tree_info
+            
 
 def read_json_tree_info(file: TextIOWrapper) -> dict:
     """Reads the information from a file that contains the assumed format of:
@@ -488,7 +487,7 @@ def write_csv_headers_tofile(file: TextIOWrapper, headers: dict) -> None:
                 [CSV_HEADER] : LIST(),
                 ...
             }
-        :meth:`read_json_tree_info` creates a dictionary with this format.
+        :func:`read_json_tree_info` creates a dictionary with this format.
 
     Args:
         file (TextIOWrapper): The file to be written to.
@@ -498,7 +497,256 @@ def write_csv_headers_tofile(file: TextIOWrapper, headers: dict) -> None:
     
     file.write(output_header + "\n")
 
-def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_key_exists: bool = False, status: ProgramStatus = None) -> str|None:
+
+def write_json_data_tofile(file: TextIOWrapper, data: list, headers: dict, rowcount: FileLineInfo = None, prog_status: ProgramStatus = None) -> None:
+    """Writes the json data provided by the :func:`call_nvd_api` function and 
+       formated by :meth:`json.loads` function. The function is intended to
+       work with the "vulnerabilities" list of the json response of the 
+       NVD NIST CVE API. 
+
+    Args:
+        file (TextIOWrapper): The file to be written to.
+        data (list): The list of data that contains objects.
+        headers (dict): The dict that contains the headers & traversal information.
+        rowcount (FileLineInfo, optional): Keeps track of the number of rows (i.e., # of lines in file - 1). Defaults to None.
+        prog_status (ProgramStatus, optional): Outputs the current progress of this function. Defaults to None.
+
+    Raises:
+        IOError: Raised if the file has issues with not exisiting, permissions, invalid file mode,
+                 unicode encode error, or existing as a directory.
+    """
+    entry_ind = 1
+    for entry in data:
+        if prog_status:
+            prog_status.update_progress_bar(f'{f"Processing data...({entry_ind})":{PADDING_WIDTH}}')
+            entry_ind += 1
+        row = ""
+        for header in headers.values():
+            if rowcount and header[0] == "null":
+                row += str(rowcount.get_count()) + ","
+                rowcount.increm_count()
+            else:
+                element = search_nested_value(entry,header)
+                if element:
+                    element = str(element)
+                    if element.isnumeric() or re.match(r'^[-+]?\d*\.\d*$',element) is not None:
+                        row += element[:-2] if element.endswith(".0") else element
+                    else:
+                        element = element.strip()
+                        if re.search(r'\\"|\"',element):
+                            element = re.sub(r'\\"|\"', "\'", element).replace("\t","\\t").replace("\n","\\n")
+                        
+                        row += f'\"{element}\"'
+                        
+                row += ","
+
+        try:
+            file.write(row[:-1]+"\n")
+        except (FileNotFoundError,
+                PermissionError,
+                ValueError,
+                UnicodeEncodeError,
+                IsADirectoryError):
+            raise IOError("There was an issue with this file.")
+
+
+def search_nested_value(data: list, args: list) -> str|None:
+    """Traverses the data provided by :func:`write_json_data_tofile` which contains
+       a list of data objects given from the JSON API response of :func:`call_nvd_api`
+
+    Args:
+        data (list): The list of data that contains objects.
+        args (list): The dict that contains the headers & traversal information.
+
+    Returns:
+        str|None: 
+    """
+    item = data
+
+    for arg in args:
+        
+        try:
+            usable_arg = arg
+            if str(arg).isnumeric():
+                usable_arg = int(arg)
+            item = item[usable_arg]                
+        except (KeyError, IndexError, TypeError):
+            return None
+    
+    return item
+
+def conduct_create_map(output_filename: str = "output.txt", 
+                       start_year: int = 1988, 
+                       end_year: int = CURRENT_YEAR,
+                       output_mode: str = "txt",
+                       limit = 0,
+                       extra_args: str = "") -> None:
+    """ Conducts the main 'create' operation that writes API response info to the output file.
+        Processes the data map traversals specifically to be used with :func:`conduct_gather`
+
+    Args:
+        output_filename (str, optional): the file name of the output file. Defaults to "output.txt".
+        start_year (int, optional): Starting published year to gather data (inclusive). Defaults to 1988.
+        end_year (int, optional): Ending published year to gather data (inclusive). Defaults to CURRENT_YEAR.
+        output_mode (str, optional): The given output mode to decide output format. Defaults to "txt".
+        limit (int, optional): Limiting the amount of traversals outputted. Defaults to 0.
+        extra_args (str, optional): Extra arguments that be given to the API. Defaults to "".
+    """
+
+    try:
+        total_iter = ((end_year - start_year + 1) * 12)
+
+        prog_status = ProgramStatus(total_iter)
+        prog_status.create_progress_bar()
+
+        api_key_exists = False
+        if os.environ.get("api_key"):
+            api_key_exists = True
+
+        data_to_map = None
+        largest_result_len = -1
+
+        for month, year in iterate_month_year(start_year,end_year,throttle=3):
+            prog_status.update_progress_bar(f'{"Retrieving data...":{PADDING_WIDTH}}',f'mo {month}, yr {year}',True)
+
+            api_results = nvd_api_gather(year,month,extra_args,api_key_exists,prog_status)
+            entry_info = retrieve_largest_entry(api_results,prog_status)
+
+            if entry_info["result_length"] > largest_result_len:
+                largest_result_len = entry_info["result_length"]
+                data_to_map = entry_info["result"]
+            
+
+        write_api_mapping_tofile(output_filename,data_to_map,output_mode,limit)
+        prog_status.update_progress_bar(f'{"Written to file. ":{PADDING_WIDTH}}')
+
+    except IOError:
+        graceful_exit(1,prog_status)
+    except Exception:
+        graceful_exit(prog_status=prog_status)
+
+
+def retrieve_largest_entry(data_list: list, prog_status: ProgramStatus = None) -> dict[str,any]:
+    """ Goes through a list of data, given they're all JSON objects.
+        :func:`nvd_api_gather` Returns the appropriate data type of this.
+
+    Args:
+        data_list (list): The data list to be parsed and traversed.
+        prog_status (ProgramStatus, optional): Outputs the current progress of this function. Defaults to None.
+
+    Returns:
+        dict[str,any]: Returns a dict with the fields "result" and "result_length".
+    """
+    
+    largest_entry_len = -1
+    result_entry = None
+    
+    for data in data_list:
+        for i in range(len(data["vulnerabilities"])):
+            if prog_status:
+                prog_status.update_progress_bar(f'{f"Processing data...({i})":{PADDING_WIDTH}}')
+
+            parsed_traversal_count = data_mapping.traverse_json(data["vulnerabilities"][i]).count("\n")
+            if parsed_traversal_count > largest_entry_len:
+                largest_entry_len = parsed_traversal_count
+                result_entry = data["vulnerabilities"][i]
+    
+    return {
+        "result":result_entry,
+        "result_length":largest_entry_len
+    }
+
+def write_api_mapping_tofile(output_filename: str,
+                        data_entry: any,
+                        output_mode: str,
+                        limit: int = 0) -> None:
+    """Writes API mapping to a file given the arguments.
+       `limit` denotes the number of content lines in the output.
+
+    Args:
+        output_filename (str): Output file name.
+        data_entry (any): The data to be written into the output file.
+        output_mode (str): The mode in which to write the file output.
+        limit (int, optional): Limits the number of traversal lines. Defaults to 0.
+    """
+    
+    
+    json_out = False
+    if output_mode == "json":
+        json_out = True
+
+    with open(output_filename, "w",encoding="UTF-8") as output_f:
+        output_f.write(data_mapping.create_mapping(data_entry,json_out=json_out,limit=limit))
+
+
+def iterate_month_year(start_year: int = 1988, end_year: int = CURRENT_YEAR, throttle: int = 0):
+    """A generator that creates iterations based on every month of the given years. 
+       Can be throttled every year.
+
+    Args:
+        start_year (int, optional): The start year of generator. Defaults to 1988.
+        end_year (int, optional): The end year of generator. Defaults to CURRENT_YEAR.
+        throttle (int, optional): Throttles based on number of seconds. Defaults to 0.
+
+    Yields:
+        Generator: returns the generator based on the given arguments.
+    """
+
+    for year_ind in range(start_year, end_year + 1):
+        for month_ind in range(1,13):  
+            yield month_ind, year_ind
+        if throttle:
+            time.sleep(throttle)
+
+def nvd_api_gather(year_ind: int,
+                month_ind: int,
+                extra_args: str = "",
+                api_key_exists: bool = False,
+                prog_status: ProgramStatus = None) -> list:
+    """Gathers the data provided by :func:`call_nvd_api` and puts the data
+       into a list to be processed later. This is done specifically for the
+       nvd api because it only returns things in chunks of 2000 entries.
+
+    Args:
+        year_ind (int): Year published.
+        month_ind (int): Month published.
+        extra_args (str, optional): Any arguments included in the URL. Defaults to "".
+        api_key_exists (bool, optional): Uses API key if exists. Defaults to False.
+        prog_status (ProgramStatus, optional): Outputs the current status of the API gather. Defaults to None.
+
+    Returns:
+        list: A list of the given results from the API call.
+    """
+
+    start_index = 0
+    within_valid_range = True
+
+    data_list = list()
+    while within_valid_range:
+        api_response = call_nvd_api(year_ind,
+                                    month_ind,
+                                    start_index,
+                                    extra_args,
+                                    api_key_exists,
+                                    prog_status)
+        
+        if api_response is None:
+            graceful_exit(0,prog_status)
+
+        if prog_status:
+            prog_status.update_progress_bar(f'{f"Organizing data...({start_index})":{PADDING_WIDTH}}')
+
+        data = json.loads(api_response)
+        data_list.append(data)
+        start_index += 2000
+        totalResults = data["totalResults"]
+
+        if start_index >= totalResults :
+            within_valid_range = False
+
+    return data_list
+
+def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_key_exists: bool = False, prog_status: ProgramStatus = None) -> str|None:
     """Calls the NVD API and returns information about the provided month in a year.
 
     Args:
@@ -507,7 +755,7 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
         start_index (int): Beginning index of call (increments of 2000 for this API)
         args (str, optional): Any arguments included in the URL. Defaults to "".
         api_key_exists (bool, optional): Uses API key if exists. Defaults to False.
-        status (ProgramStatus, optional): Defines the current status of the requests 
+        prog_status (ProgramStatus, optional): Outputs the current status of the requests 
                                           and displays it to the progress bar if present.
                                           Defaults to None.
 
@@ -539,10 +787,10 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
                 if response.status_code == 403:
                     # wait 30 seconds before calling API again
 
-                    if status:
+                    if prog_status:
                         for i in range(30, -1, -1):
                             status_msg = f'Waiting for API ({i}s)'
-                            status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
+                            prog_status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
                             time.sleep(1)
                     else:
                         print("Waiting for API...") 
@@ -551,9 +799,9 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
                     is_not_OK = False
                 else:
 
-                    if status:
+                    if prog_status:
                         status_msg = f'Code: {response.status_code}, Trying again ({attempt_counter})'
-                        status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
+                        prog_status.update_progress_bar(status=f'{status_msg:{PADDING_WIDTH}}')
                     else:
                         print(f'Status Code: {response.status_code}')
                         print("Processing another request...")
@@ -562,8 +810,8 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
                     attempt_counter += 1
                     if attempt_counter > 10: #limiting attempts to 10
                         
-                        if status:
-                            status.update_progress_bar(status=f'{"Exceeded attempts, aborting.":{PADDING_WIDTH}}')
+                        if prog_status:
+                            prog_status.update_progress_bar(status=f'{"Exceeded attempts, aborting.":{PADDING_WIDTH}}')
                         else:
                             print("Exceeded attempts, aborting...")
 
@@ -573,86 +821,12 @@ def call_nvd_api(year: int, month: int, start_index: int, args: str = "", api_ke
 
     return data
 
-def write_json_data_tofile(file: TextIOWrapper, data: list, headers: dict, rowcount: FileLineInfo) -> None:
-    """Writes the json data provided by the :meth:`call_nvd_api` function and 
-       formated by :meth:`json.loads` function. The function is intended to
-       work with the "vulnerabilities" list of the json response of the 
-       NVD NIST CVE API. 
-
-    Args:
-        file (TextIOWrapper): The file to be written to.
-        data (list): The list of data that contains objects.
-        headers (dict): The dict that contains the headers & traversal information.
-        rowcount (FileLineInfo): Keeps track of the number of rows (i.e., # of lines in file - 1).
-
-    Raises:
-        IOError: Raised if the file has issues with not exisiting, permissions, invalid file mode,
-                 unicode encode error, or existing as a directory.
-    """
-
-    for entry in data:
-        row = ""
-        for header in headers.values():
-            if header[0] == "null":
-                row += str(rowcount.get_count()) + ","
-                rowcount.increm_count()
-            else:
-                element = search_nested_value(entry,header)
-                if element:
-                    element = str(element)
-                    if element.isnumeric() or re.match(r'^[-+]?\d*\.\d*$',element) is not None:
-                        row += element[:-2] if element.endswith(".0") else element
-                    else:
-                        element = f'\"{element}\"'
-
-                        if re.search(r'\\"',element):
-                            element = re.sub(r'\\"', "\'", element)
-                        
-                        row += element
-                        
-                row += ","
-
-        try:
-            file.write(row[:-1]+"\n")
-        except (FileNotFoundError,
-                PermissionError,
-                ValueError,
-                UnicodeEncodeError,
-                IsADirectoryError):
-            raise IOError("There was an issue with this file.")
-
-
-def search_nested_value(data: list, args: list) -> str|None:
-    """Traverses the data provided by :meth:`write_json_data_tofile` which contains
-       a list of data objects given from the JSON API response of :meth:`call_nvd_api`
-
-    Args:
-        data (list): The list of data that contains objects.
-        args (list): The dict that contains the headers & traversal information.
-
-    Returns:
-        str|None: 
-    """
-    item = data
-
-    for arg in args:
-        
-        try:
-            usable_arg = arg
-            if str(arg).isnumeric():
-                usable_arg = int(arg)
-            item = item[usable_arg]                
-        except (KeyError, IndexError, TypeError):
-            return None
-    
-    return item
-
-
 def graceful_exit(exit_status: int = -1, prog_status: ProgramStatus = None) -> None:
     """Gracefully exits the program given an exit status during operation
 
     Args:
         exit_status (int, optional): Denotes what caused the exit. Defaults to -1.
+        prog_status (ProgramStatus, optional): Used to safely close the progress bar.
     """
     if prog_status:
         prog_status._close_progress_bar()
@@ -664,7 +838,7 @@ def graceful_exit(exit_status: int = -1, prog_status: ProgramStatus = None) -> N
     elif exit_status == 1: #IO issue
         print("\nThere was an issue with Input/Output, exiting.")
     else:
-        print("\nUnknown cause of error, exiting.")
+        print("\nThere was an issue with main operation, exiting.")
 
     sys.exit(1)
 
@@ -672,7 +846,7 @@ def graceful_exit(exit_status: int = -1, prog_status: ProgramStatus = None) -> N
 # main function definition
 def main():
     """The main operations of the script, deals with command-line arguments and
-       calling the function :meth:`conduct_gather` to begin the scripting process.
+       calling the function :func:`conduct_gather` to begin the scripting process.
     """
     # command-line information
     desc = "A script that accesses the NVD NIST CVE API. Returns data of CVE entries " \
@@ -680,23 +854,33 @@ def main():
            "script will write the following information in a CSV format to the output " \
            "file; however, the file extension for this file does not matter."
     parser = argparse.ArgumentParser(description=desc)
+    data_map_group = parser.add_mutually_exclusive_group(required=True)
+    # create_map_group = data_map_group.add_argument_group()
 
     # output file
     parser.add_argument("-o", "--output_file", help="Where the data will be sent to.", required=True)
 
     # start year
-    syhelp = "Beginning published year (inclusive). Range of years: 1988 - 2023, " \
+    syhelp = f'Beginning published year (inclusive). Range of years: 1988 - {CURRENT_YEAR}, ' \
              "NOTE that it must be less than or equal to the end year."
     parser.add_argument("-sy", "--start_year", help=syhelp, required=True, type=CliArgValidation.validate_year)
 
     # end year
-    eyhelp = "Ending published year (inclusive). Range of years: 1988 - 2023, " \
+    eyhelp = f'Ending published year (inclusive). Range of years: 1988 - {CURRENT_YEAR}, ' \
              "NOTE that it must be greater than or equal to the start year."
     parser.add_argument("-ey", "--end_year", help=eyhelp, required=True, type=CliArgValidation.validate_year)
 
     # data mapping
     dmhelp = "A file containing CSV Header information for headers & data mapping for traversal. Provide either a json or txt file."
-    parser.add_argument("-dm", "--data_mapping", help=dmhelp, required=True, type=CliArgValidation.validate_data_map)
+    data_map_group.add_argument("-dm", "--data_mapping", help=dmhelp, type=CliArgValidation.validate_data_map)
+
+    cmhelp = "A setting that a user can select instead of -dm (--data_mapping) where a mapping is " \
+             "created using the arguments, returning the largest number of mappings within the given" \
+             " data. The -o (--output_file) option is utilized for output of the generated headers and data maps for traversal."
+    data_map_group.add_argument("-cm", "--create_mapping", help=cmhelp, type=CliArgValidation.validate_create_mapping)
+    
+    lmhelp = "Limit the number mappings generated with a range of 1 - 100,000. Only usable when -cm (--create_mapping) is chosen."
+    parser.add_argument("-lm","--limit_mapping",help=lmhelp,type=CliArgValidation.validate_limit_mapping,required=False,default=0)
 
     # extra arguments
     eahelp = "Extra arguments for the API URL, provide as many as needed. " \
@@ -707,9 +891,10 @@ def main():
 
     #post argument parse processing
     if args.start_year > args.end_year:
-        parser.print_usage()
-        print("Argument Error: Please make sure that start year is less than or equal to end year (inclusve).")
-        graceful_exit(99)
+        parser.error("Please make sure that start year is less than or equal to end year (inclusve).")
+
+    if args.data_mapping and args.limit_mapping:
+        parser.error("Please make sure to not use -dm (--data_mapping) and -lm (--limit_mapping) at the same time.")
     
     eargs = ""
     if args.extra_args:
@@ -718,7 +903,10 @@ def main():
 
 
     #main operation
-    conduct_gather(args.output_file,args.start_year,args.end_year,args.data_mapping,eargs)
+    if args.data_mapping:
+        conduct_gather(args.output_file,args.start_year,args.end_year,args.data_mapping,eargs)
+    elif args.create_mapping:
+        conduct_create_map(args.output_file,args.start_year,args.end_year,args.create_mapping,args.limit_mapping,eargs)
     
 
 if __name__ == "__main__":

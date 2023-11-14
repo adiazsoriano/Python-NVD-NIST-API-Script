@@ -84,15 +84,17 @@ class CliArgValidation:
             str: A valid filename with valid contents.
         """
         try:
-            split_value = str(value).split(".")
+            _,split_value = os.path.splitext(value)
             
-            if len(split_value) != 2:
-                raise argparse.ArgumentTypeError("Please enter a filename with a file extension. Try either \"example.txt\" or \"example.json\"")
+            if not os.path.isfile(value):
+                raise argparse.ArgumentTypeError("Please enter a proper file path.")
             
-            if split_value[1] == "json":
+            if split_value == ".json":
                 return CliArgValidation.validate_data_map_json(value)
-            else:
+            elif split_value == ".txt":
                 return CliArgValidation.validate_data_map_txt(value)
+            else:
+                raise argparse.ArgumentTypeError("Please ensure that the file ends in either \".json\" or \".txt\".")
 
         except (ValueError, AttributeError):
             raise argparse.ArgumentTypeError("This is not a valid format for files.")
@@ -240,7 +242,7 @@ class CliArgValidation:
                                         Raised if the value isn't within 1 - 100,000.
 
         Returns:
-            int: _description_
+            int: a valid input for limiting.
         """
         try:
             value = int(value)
@@ -432,15 +434,16 @@ def conduct_gather(output_filename: str = "output.csv",
         prog_status.update_progress_bar(f'{"Written to file. ":{PADDING_WIDTH}}')
     except IOError:
         graceful_exit(1,prog_status)
-    except Exception as e:
+    except Exception:
         graceful_exit(prog_status=prog_status)
 
-def retrieve_json_info(headers_filename:str):
+def retrieve_json_info(headers_filename: str):
     json_tree_info = None
+    _, headers_filename_ext = os.path.splitext(headers_filename)
     with open(headers_filename, "r") as input_headers_f:
         # with the validation from before, the assumption here is that
         # both files are formatted correctly.
-        if headers_filename.split(".")[1] == "json":
+        if headers_filename_ext == ".json":
             json_tree_info = json.loads(input_headers_f.read())
         else:
             json_tree_info = read_json_tree_info(input_headers_f)

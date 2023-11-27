@@ -11,7 +11,7 @@ api_key='API KEY GOES HERE'
 The script can output data retrieved and stored in a CSV format. The script can also take that same data (grabs the entry with the most traversals) and turn the data into traversals that can be used to then retrieve specific data. These are the "data_mapping" and "create_mapping" modes respectively. 
 
 ## Usage
-Geneal usage of the script and the needed arguments.
+General usage of the script and the needed arguments.
 ```
 usage: nvd_nist_cve_gatherdata.py [-h] -o OUTPUT_FILE -sy START_YEAR -ey END_YEAR
                                   (-dm DATA_MAPPING | -cm CREATE_MAPPING) [-lm LIMIT_MAPPING]

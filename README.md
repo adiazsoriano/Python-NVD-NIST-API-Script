@@ -7,6 +7,14 @@ The script reads from the .env file inside the folder if present. Or it reads fr
 api_key='API KEY GOES HERE'
 ```
 
+## Dependencies
+This script uses packages indicated in [the requirements file.](requirements.txt)
+
+Run the command to install them
+```shell
+pip install -r requirements.txt
+```
+
 ## Output modes
 The script can output data retrieved and stored in a CSV format. The script can also take that same data (grabs the entry with the most traversals) and turn the data into traversals that can be used to then retrieve specific data. These are the "data_mapping" and "create_mapping" modes respectively. 
 

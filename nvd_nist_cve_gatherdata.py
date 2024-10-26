@@ -331,15 +331,14 @@ class ProgramStatus:
         self.counter = 0
         self.status = "..."
         self.progress = "..."
-
     
     def create_progress_bar(self) -> None:
         """ Creates the progress bar with custom widgets
         """
         self.widgets = [
-            self.status,
+            progressbar.Variable('status', initial_value="...", format="{formatted_value}"),
             progressbar.Percentage(),
-            " (", self.progress ,") ",
+            " (", progressbar.Variable('progress', initial_value="...", format="{formatted_value}") ,") ",
             progressbar.Bar(), " ",
             progressbar.Timer(), " | " , progressbar.AdaptiveETA()
         ]
@@ -358,21 +357,18 @@ class ProgramStatus:
             AttributeError: Raised if the update function is invoked before invoking :meth:`create_progress_bar`
         """
         if self.pb:
-            if status:
-                self.status = status
-            if progress:
-                self.progress = progress
-
-            #self.widgets[0] correlates to status
-            #self.widgets[3] correlates to progress
-            self.widgets[0] = self.status
-            if self.counter != self.max_val:
-                self.widgets[3] = self.progress
             
             if increment_total:
                 self.counter += 1
 
-            self.pb.update(self.counter)
+            if status:
+                self.status = status
+
+            if progress:
+                self.progress = progress
+
+
+            self.pb.update(self.counter, status=self.status, progress=self.progress)
         else:
             raise AttributeError("Please make sure to invoke example_obj.create_progress_bar() before updating.")
 
@@ -386,7 +382,7 @@ class ProgramStatus:
     def __del__(self):
         """ Destructor which closes the progress bar once the object is out of scope.
         """
-        if not self.pb._finished:
+        if hasattr(self, 'pb') and self.pb and not self.pb._finished:
             self._close_progress_bar()
 
 # function definitions
